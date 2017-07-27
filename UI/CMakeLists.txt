@@ -36,6 +36,8 @@ else()
 endif()
 
 find_package(Qt5Widgets ${FIND_MODE})
+find_package(Qt5Network ${FIND_MODE})
+find_package(Qt5WebSockets ${FIND_MODE})
 
 if(NOT Qt5Widgets_FOUND)
 	if (ENABLE_UI)
@@ -110,6 +112,7 @@ endif()
 set(obs_SOURCES
 	${obs_PLATFORM_SOURCES}
 	obs-app.cpp
+	websocket-control.cpp
 	api-interface.cpp
 	window-basic-main.cpp
 	window-basic-filters.cpp
@@ -154,6 +157,7 @@ set(obs_SOURCES
 set(obs_HEADERS
 	${obs_PLATFORM_HEADERS}
 	obs-app.hpp
+	websocket-control.hpp
 	platform.hpp
 	window-main.hpp
 	window-basic-main.hpp
@@ -214,11 +218,19 @@ set(obs_QRC
 qt5_wrap_ui(obs_UI_HEADERS ${obs_UI})
 qt5_add_resources(obs_QRC_SOURCES ${obs_QRC})
 
-add_executable(obs WIN32
+add_executable(obs WIN32 MACOSX_BUNDLE
 	${obs_SOURCES}
 	${obs_HEADERS}
 	${obs_UI_HEADERS}
 	${obs_QRC_SOURCES})
+
+# MconfDeskshare
+set_target_properties(obs PROPERTIES
+	MACOSX_BUNDLE_INFO_STRING "obs-studio"
+	MACOSX_BUNDLE_ICON_FILE "obs.icns"
+	MACOSX_BUNDLE_GUI_IDENTIFIER "com.mconf.mconf-deskshare"
+	MACOSX_BUNDLE_BUNDLE_NAME "OBS Studio"
+	MACOSX_BUNDLE_BUNDLE_VERSION "1.0")
 
 if(WIN32)
 	if(CMAKE_SIZEOF_VOID_P EQUAL 8)
@@ -236,6 +248,8 @@ target_link_libraries(obs
 	libobs
 	libff
 	Qt5::Widgets
+	Qt5::Network
+	Qt5::WebSockets
 	obs-frontend-api
 	${LIBCURL_LIBRARIES}
 	${obs_PLATFORM_LIBRARIES})

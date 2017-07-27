@@ -37,6 +37,7 @@
 #include <util/util.hpp>
 
 #include <QPointer>
+#include "websocket-control.hpp"		// Mconf Deskshare
 
 class QMessageBox;
 class QListWidgetItem;
@@ -104,6 +105,20 @@ class OBSBasic : public OBSMainWindow {
 		DropType_Media
 	};
 
+/* ############################################################
+			Changes for Mconf Deskshare
+############################################################ */
+
+private:
+	QPointer<WebsocketControl> wsControl = nullptr;
+	void InitWebsocketControl();
+
+signals:
+	void signal_StreamStarted();
+	void signal_StreamStopped();
+
+/* ############################################################ */
+
 private:
 	obs_frontend_callbacks *api = nullptr;
 
@@ -114,6 +129,7 @@ private:
 	std::vector<std::string> projectorArray;
 	std::vector<int> previewProjectorArray;
 
+	bool showSourcePropertiesWindow;
 	bool loaded = false;
 	long disableSaving = 1;
 	bool projectChanged = false;
@@ -342,9 +358,16 @@ private:
 		obs_data_array_t *savedPreviewProjectors);
 
 public slots:
+	void onSignal_StartStreaming(QString url, QString path, int width,
+		int height, int scaled_width, int scaled_height, int fps, int bitrate);
+	void onSignal_TrayConfig(int displayid, bool captureMouse);
+	void onSignal_TrayConfigInit(int *display, bool *captureMouse);
+	void ToggleVisibility();
+
 	void StartStreaming();
 	void StopStreaming();
 	void ForceStopStreaming();
+	void SetMuted(bool muted);
 
 	void StreamDelayStarting(int sec);
 	void StreamDelayStopping(int sec);
@@ -625,6 +648,7 @@ private slots:
 	void OpenSourceProjector();
 	void OpenSceneProjector();
 
+	void StreamUpdate();
 public slots:
 	void on_actionResetTransform_triggered();
 
@@ -641,4 +665,14 @@ public:
 
 private:
 	std::unique_ptr<Ui::OBSBasic> ui;
+	void deskshare_ConfigSettings(QString path, QString url,
+		int width, int height, int scaled_width, int scaled_height, int fps, int bitrate);
+	void deskshare_ConfigDisplayId(int displayid);
+	void deskshare_ConfigCaptureMouse(bool captureMouse);
+	void deskshare_ConfigVideo(int w, int h, int dw, int dh);
+
+	QPointer<QTimer> streamMonitorTimer;
+	bool streamActive = false;
+	void StreamStarted(obs_output_t *output);
+	void StreamStopped();
 };

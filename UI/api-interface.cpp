@@ -374,6 +374,11 @@ struct OBSStudioAPI : obs_frontend_callbacks {
 		for (auto cb : callbacks)
 			cb.callback(event, cb.private_data);
 	}
+
+	void obs_frontend_set_muted(bool muted) override
+	{
+		QMetaObject::invokeMethod(main, "SetMuted", Q_ARG(bool, muted));
+	}
 };
 
 obs_frontend_callbacks *InitializeAPIInterface(OBSBasic *main)

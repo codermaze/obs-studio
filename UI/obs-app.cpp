@@ -66,6 +66,7 @@ static bool log_verbose = false;
 static bool unfiltered_log = false;
 bool opt_start_streaming = false;
 bool opt_start_recording = false;
+bool opt_hidden = false;
 bool opt_studio_mode = false;
 bool opt_start_replaybuffer = false;
 bool opt_minimize_tray = false;
@@ -906,6 +907,7 @@ bool OBSApp::OBSInit()
 		mainWindow->setAttribute(Qt::WA_DeleteOnClose, true);
 		connect(mainWindow, SIGNAL(destroyed()), this, SLOT(quit()));
 
+		setQuitOnLastWindowClosed(false);
 		mainWindow->OBSInit();
 
 		connect(this, &QGuiApplication::applicationStateChanged,
@@ -1273,6 +1275,15 @@ static int run_program(fstream &logFile, int argc, char *argv[])
 	profile_register_root(run_program_init, 0);
 
 	ScopeProfiler prof{run_program_init};
+
+#ifdef __APPLE__
+	QDir dir(argv[0]);
+	dir.cdUp(); dir.cdUp();
+	if (!QDir::setCurrent(dir.absolutePath() + "/Resources/bin"))
+		qDebug() << "Failed to change current directory to" << (dir.absolutePath() + "/Resources/bin");
+	else
+		qDebug() << "Current directory changed to" << QDir::currentPath();
+#endif
 
 	QCoreApplication::addLibraryPath(".");
 
@@ -1777,6 +1788,8 @@ int main(int argc, char *argv[])
 		} else if (arg_is(argv[i], "--scene", nullptr)) {
 			if (++i < argc) opt_starting_scene = argv[i];
 
+		} else if (arg_is(argv[i], "--hidden", nullptr)) {
+			opt_hidden = true;
 		} else if (arg_is(argv[i], "--minimize-to-tray", nullptr)) {
 			opt_minimize_tray = true;
 

@@ -73,6 +73,8 @@ struct obs_frontend_callbacks {
 	virtual void on_load(obs_data_t *settings)=0;
 	virtual void on_save(obs_data_t *settings)=0;
 	virtual void on_event(enum obs_frontend_event event)=0;
+
+	virtual void obs_frontend_set_muted(bool muted) = 0;
 };
 
 EXPORT void obs_frontend_set_callbacks_internal(

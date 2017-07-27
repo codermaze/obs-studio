@@ -60,6 +60,7 @@
 
 #include <fstream>
 #include <sstream>
+#include <iostream>
 
 #include <QScreen>
 #include <QWindow>
@@ -1275,6 +1276,8 @@ void OBSBasic::OBSInit()
 
 	api = InitializeAPIInterface(this);
 
+	InitWebsocketControl();
+
 	AddExtraModulePaths();
 	blog(LOG_INFO, "---------------------------------");
 	obs_load_all_modules();
@@ -1366,7 +1369,12 @@ void OBSBasic::OBSInit()
 
 #ifdef _WIN32
 	SetWin32DropStyle(this);
-	show();
+	if (opt_hidden) {
+		SetShowing(false);
+	}
+	else {
+		show();
+	}
 #endif
 
 	bool alwaysOnTop = config_get_bool(App()->GlobalConfig(), "BasicWindow",
@@ -1377,7 +1385,12 @@ void OBSBasic::OBSInit()
 	}
 
 #ifndef _WIN32
-	show();
+	if (opt_hidden) {
+		SetShowing(false);
+	}
+	else {
+		show();
+	}
 #endif
 
 	QList<int> defSizes;
@@ -1399,9 +1412,19 @@ void OBSBasic::OBSInit()
 
 	ui->mainSplitter->setSizes(defSizes);
 
+	showSourcePropertiesWindow = true;
 	SystemTray(true);
 
 	OpenSavedProjectors();
+
+	if (opt_hidden){
+		hide();
+		trayIcon->hide();
+	}
+}
+
+void OBSBasic::InitWebsocketControl(){
+	wsControl = new WebsocketControl(api);
 }
 
 void OBSBasic::InitHotkeys()
@@ -1833,7 +1856,7 @@ void OBSBasic::CreatePropertiesWindow(obs_source_t *source)
 		properties->close();
 
 	properties = new OBSBasicProperties(this, source);
-	properties->Init();
+	properties->Init(showSourcePropertiesWindow);
 	properties->setAttribute(Qt::WA_DeleteOnClose, true);
 }
 
@@ -2194,6 +2217,8 @@ void OBSBasic::TimedCheckForUpdates()
 
 void OBSBasic::CheckForUpdates(bool manualUpdate)
 {
+	// do not update
+	return;
 #ifdef UPDATE_SPARKLE
 	trigger_sparkle_update();
 #elif ENABLE_WIN_UPDATER
@@ -3884,6 +3909,101 @@ void OBSBasic::StartStreaming()
 		"BasicWindow", "ReplayBufferWhileStreaming");
 	if (replayBufferWhileStreaming)
 		StartReplayBuffer();
+
+	std::cout << "StartStreaming" << std::endl;
+}
+
+void OBSBasic::SetMuted(bool muted) {
+	VolControl *control;
+
+	for (size_t i = 0; i < volumes.size(); i++) {
+		control = volumes[i];
+		QMetaObject::invokeMethod(control, "SetMuted", Q_ARG(bool, muted));
+	}
+}
+
+void OBSBasic::onSignal_StartStreaming(QString name, QString url, int width,
+	int height, int swidth, int sheight, int fps, int bitrate){
+
+	deskshare_ConfigSettings(name, url, width, height, swidth, sheight, fps, bitrate);
+	//StartStreaming();
+
+	//std::cout << "onSignal_StartStreaming" << std::endl;
+}
+
+void OBSBasic::onSignal_TrayConfig(int display, bool captureMouse){
+	deskshare_ConfigDisplayId(display);
+	deskshare_ConfigCaptureMouse(captureMouse);
+}
+
+void OBSBasic::onSignal_TrayConfigInit(int *displayid, bool *captureMouse){
+	showSourcePropertiesWindow = false;
+	on_actionSourceProperties_triggered();
+
+	QList<QComboBox*> combo = properties->findChildren<QComboBox*>();
+
+	if (combo.count() == 1)
+		*displayid = combo[0]->currentIndex();
+
+	QList<QCheckBox*> check = properties->findChildren<QCheckBox*>();
+
+	if (check.count() == 2)
+		*captureMouse = check[1]->isChecked();
+
+	properties->close();
+
+	showSourcePropertiesWindow = true;
+}
+
+void OBSBasic::deskshare_ConfigSettings(QString path, QString url,
+	int w, int h, int sw, int sh, int fps, int bitrate)
+{
+	OBSBasicSettings basicSettings(this);
+	basicSettings.findChild<QComboBox*>("streamType")->setCurrentIndex(1);
+
+	basicSettings.deskshare_SetResolutions(w, h, sw, sh);
+	basicSettings.deskshare_SetFPS(fps);
+	basicSettings.deskshare_SetBitrate(bitrate);
+
+	basicSettings.findChild<QDialogButtonBox*>("buttonBox")->
+		button(QDialogButtonBox::Ok)->click();
+
+	obs_data_t *settingsData = basicSettings.GetStreamProperties()->GetSettings();
+	obs_data_set_string(settingsData, "server", url.toStdString().c_str());
+	obs_data_set_string(settingsData, "key", path.toStdString().c_str());
+	basicSettings.deskshare_SaveStreamSettings();
+}
+
+void OBSBasic::deskshare_ConfigDisplayId(int id){
+	showSourcePropertiesWindow = false;
+	on_actionSourceProperties_triggered();
+
+	QList<QComboBox*> children = properties->findChildren<QComboBox*>();
+
+	if (!children.isEmpty())
+		children.first()->setCurrentIndex(id);
+
+	properties->SaveChanges();
+
+	showSourcePropertiesWindow = true;
+}
+
+void OBSBasic::deskshare_ConfigCaptureMouse(bool captureMouse){
+	showSourcePropertiesWindow = false;
+	on_actionSourceProperties_triggered();
+
+	QList<QCheckBox*> children = properties->findChildren<QCheckBox*>();
+
+	if (!children.isEmpty())
+		children.last()->setChecked(captureMouse);
+
+	properties->SaveChanges();
+
+	showSourcePropertiesWindow = true;
+}
+
+void OBSBasic::ToggleVisibility(){
+	ToggleShowHide();
 }
 
 #ifdef _WIN32
@@ -4032,6 +4152,7 @@ void OBSBasic::StreamingStart()
 	ui->streamButton->setText(QTStr("Basic.Main.StopStreaming"));
 	ui->streamButton->setEnabled(true);
 	ui->statusbar->StreamStarted(outputHandler->streamOutput);
+	StreamStarted(outputHandler->streamOutput);
 
 	if (sysTrayStream) {
 		sysTrayStream->setText(ui->streamButton->text());
@@ -4087,6 +4208,7 @@ void OBSBasic::StreamingStop(int code)
 	}
 
 	ui->statusbar->StreamStopped();
+	StreamStopped();
 
 	ui->streamButton->setText(QTStr("Basic.Main.StartStreaming"));
 	ui->streamButton->setEnabled(true);
@@ -5020,6 +5142,32 @@ int OBSBasic::GetProfilePath(char *path, size_t size, const char *file) const
 	return snprintf(path, size, "%s/%s/%s", profiles_path, profile, file);
 }
 
+void OBSBasic::StreamUpdate() {
+	uint64_t bytesSent = obs_output_get_total_bytes(outputHandler->streamOutput);
+	if (bytesSent > 0) {
+		emit signal_StreamStarted();
+		delete streamMonitorTimer;
+	}
+}
+
+void OBSBasic::StreamStarted(obs_output_t *output) {
+	if (!streamActive) {
+		streamMonitorTimer = new QTimer(this);
+		connect(streamMonitorTimer, SIGNAL(timeout()),
+			this, SLOT(StreamUpdate()));
+		streamMonitorTimer->start(1000);
+		streamActive = true;
+	}
+}
+
+void OBSBasic::StreamStopped() {
+	if (!outputHandler->Active()) {
+		emit signal_StreamStopped();
+		delete streamMonitorTimer;
+		streamActive = false;
+	}
+}
+
 void OBSBasic::on_toggleSceneTransitions_toggled(bool visible)
 {
 	ui->sceneTransitionsLabel->setVisible(visible);
@@ -5230,7 +5378,9 @@ void OBSBasic::SystemTray(bool firstStarted)
 	if (firstStarted)
 		SystemTrayInit();
 
-	if (!sysTrayWhenStarted && !sysTrayEnabled) {
+	if (opt_hidden) {
+		trayIcon->hide();
+	} else if (!sysTrayWhenStarted && !sysTrayEnabled) {
 		trayIcon->hide();
 	} else if ((sysTrayWhenStarted && sysTrayEnabled)
 			|| opt_minimize_tray) {
