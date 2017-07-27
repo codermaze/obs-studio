@@ -3961,9 +3961,9 @@ void OBSBasic::deskshare_ConfigSettings(QString path, QString url,
 	OBSBasicSettings basicSettings(this);
 	basicSettings.findChild<QComboBox*>("streamType")->setCurrentIndex(1);
 
-	basicSettings.deskshare_SetResolutions(w, h, sw, sh);
-	basicSettings.deskshare_SetFPS(fps);
-	basicSettings.deskshare_SetBitrate(bitrate);
+	// basicSettings.deskshare_SetResolutions(w, h, sw, sh);
+	// basicSettings.deskshare_SetFPS(fps);
+	// basicSettings.deskshare_SetBitrate(bitrate);
 
 	basicSettings.findChild<QDialogButtonBox*>("buttonBox")->
 		button(QDialogButtonBox::Ok)->click();
